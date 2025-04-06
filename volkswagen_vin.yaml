@@ -1,0 +1,237 @@
+name: Volkswagen
+
+tables:
+  - name: chassis_codes
+    description: Production date and chassis number for each Type 25 vehicle.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: type25chassiscodes
+    primary_key:
+      columns: [month, year, chassisnumber]
+    dimensions:
+      - name: month
+        expr: month
+        description: Month of production
+        data_type: varchar
+
+      - name: year
+        expr: year
+        description: Year of production
+        data_type: number
+
+      - name: chassis_number
+        expr: chassisnumber
+        description: Chassis number identifier
+        data_type: varchar
+
+  - name: vin_master
+    description: Master VIN table for decoding Type 25 vehicle identification numbers.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: vw_type25_vin_master
+    primary_key:
+      columns: [vin]
+    dimensions:
+      - name: vin
+        expr: vin
+        data_type: varchar
+      - name: country_code
+        expr: countryofmanufacture
+        data_type: varchar
+      - name: manufacturer_code
+        expr: manufacturer
+        data_type: varchar
+      - name: body_type_code
+        expr: vehiclebodytype
+        data_type: varchar
+      - name: series_code
+        expr: vehicleseries
+        data_type: varchar
+      - name: model_year_code
+        expr: yearofmanufacture
+        data_type: varchar
+      - name: plant_code
+        expr: assemblyplant
+        data_type: varchar
+      - name: chassis_number
+        expr: chassisnumber
+        data_type: varchar
+
+  - name: country
+    description: Country code reference table.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: countryofmanufacture
+    primary_key:
+      columns: [code]
+    dimensions:
+      - name: country_code
+        expr: code
+        data_type: varchar
+      - name: country
+        expr: country
+        data_type: varchar
+
+  - name: manufacturer
+    description: Manufacturer reference table.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: manufacturer
+    primary_key:
+      columns: [code]
+    dimensions:
+      - name: manufacturer_code
+        expr: code
+        data_type: varchar
+      - name: name
+        expr: name
+        data_type: varchar
+
+  - name: vehicle_body_type
+    description: Body type reference table.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: vehiclebodytype
+    primary_key:
+      columns: [code]
+    dimensions:
+      - name: body_type_code
+        expr: code
+        data_type: varchar
+      - name: description
+        expr: description
+        data_type: varchar
+
+  - name: vehicle_series
+    description: Vehicle series reference table.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: vehicleseries
+    primary_key:
+      columns: [code]
+    dimensions:
+      - name: series_code
+        expr: code
+        data_type: varchar
+      - name: description
+        expr: description
+        data_type: varchar
+
+  - name: model_year
+    description: Year code to calendar year mapping.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: yearofmanufacture
+    primary_key:
+      columns: [code]
+    dimensions:
+      - name: model_year_code
+        expr: code
+        data_type: varchar
+      - name: year
+        expr: year
+        data_type: number
+
+  - name: assembly_plant
+    description: Assembly plant code reference.
+    base_table:
+      database: agent_gateway
+      schema: ag_schema
+      table: assemblyplant
+    primary_key:
+      columns: [code]
+    dimensions:
+      - name: plant_code
+        expr: code
+        data_type: varchar
+      - name: location
+        expr: location
+        data_type: varchar
+
+relationships:
+  - name: vin_to_country
+    left_table: vin_master
+    right_table: country
+    relationship_columns:
+      - left_column: country_code
+        right_column: country_code
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: vin_to_manufacturer
+    left_table: vin_master
+    right_table: manufacturer
+    relationship_columns:
+      - left_column: manufacturer_code
+        right_column: manufacturer_code
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: vin_to_body_type
+    left_table: vin_master
+    right_table: vehicle_body_type
+    relationship_columns:
+      - left_column: body_type_code
+        right_column: body_type_code
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: vin_to_series
+    left_table: vin_master
+    right_table: vehicle_series
+    relationship_columns:
+      - left_column: series_code
+        right_column: series_code
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: vin_to_model_year
+    left_table: vin_master
+    right_table: model_year
+    relationship_columns:
+      - left_column: model_year_code
+        right_column: model_year_code
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: vin_to_plant
+    left_table: vin_master
+    right_table: assembly_plant
+    relationship_columns:
+      - left_column: plant_code
+        right_column: plant_code
+    join_type: left_outer
+    relationship_type: many_to_one
+
+verified_natural_language_queries:
+  - name: lookup_vin_details
+    description: Return full decoded information about a VIN.
+    query: |
+      SELECT
+        vm.vin,
+        c.country,
+        m.name AS manufacturer,
+        b.description AS body_type,
+        s.description AS series,
+        y.year AS model_year,
+        a.location AS assembly_plant,
+        vm.chassisnumber
+      FROM ag_schema.vw_type25_vin_master vm
+      LEFT JOIN ag_schema.countryofmanufacture c ON vm.countryofmanufacture = c.code
+      LEFT JOIN ag_schema.manufacturer m ON vm.manufacturer = m.code
+      LEFT JOIN ag_schema.vehiclebodytype b ON vm.vehiclebodytype = b.code
+      LEFT JOIN ag_schema.vehicleseries s ON vm.vehicleseries = s.code
+      LEFT JOIN ag_schema.yearofmanufacture y ON vm.yearofmanufacture = y.code
+      LEFT JOIN ag_schema.assemblyplant a ON vm.assemblyplant = a.code
+      WHERE vm.vin = '{{ vin_code }}';
+    parameters:
+      - name: vin_code
+        type: string
+        description: VIN code to decode
